@@ -57,16 +57,24 @@ public:
 		memset(display, 0, sizeof(display));
 	}
 
+	void test() {
+		for (int i = 0; i < 64 * 32; i += 5) {
+			display[i] = 1;
+		}
+	}
 
 };
 
 class Display {
 public:
-	static constexpr int screenWidth{ 640 };
-	static constexpr int screenHeight{ 320 };
+	static constexpr int WIDTH{ 64 };
+	static constexpr int HEIGHT{ 32 };
+	static constexpr int SCALE{ 10 };
+	
 
 	SDL_Window* gWindow{ nullptr };
 	SDL_Renderer* gRenderer{ nullptr };
+	SDL_Texture* gTexture{ nullptr };
 
 
 	bool init() {
@@ -77,13 +85,21 @@ public:
 			success = false;
 		}
 		else {
-			gWindow = SDL_CreateWindow("CHIP-8 Emulator", screenWidth, screenHeight, 0);
+			gWindow = SDL_CreateWindow("CHIP-8 Emulator", WIDTH*SCALE, HEIGHT*SCALE, 0);
 			if (gWindow == nullptr) {
 				SDL_Log("Window could not be created! SDL error: %s\n", SDL_GetError());
 				success = false;
 			}
 			else {
 				gRenderer = SDL_CreateRenderer(gWindow, nullptr);
+				gTexture = SDL_CreateTexture(
+					gRenderer, 
+					SDL_PIXELFORMAT_RGBA8888, 
+					SDL_TEXTUREACCESS_STREAMING, 
+					WIDTH, 
+					HEIGHT
+				);
+				SDL_SetTextureScaleMode(gTexture, SDL_SCALEMODE_NEAREST);
 			}
 		}
 		return success;
@@ -98,42 +114,39 @@ public:
 		SDL_Quit();
 	}
 
-	int start() {
-		int exitCode{ 0 };
-
-		if (init() == false) {
-			SDL_Log("Unable to initialize program!\n");
-			exitCode = 1;
+	bool processInput() {
+		SDL_Event e;
+		SDL_zero(e);
+		while (SDL_PollEvent(&e) == true) {
+			if (e.type == SDL_EVENT_QUIT) {
+				return true;
+			}
 		}
-		else {
-			SDL_FRect rect = { 0, 0, 10, 10 };
-			SDL_Color rect_color = { 255, 255, 255, 255 };
-			bool quit{ false };
+		return false;
+	}
 
-			SDL_Event e;
-			SDL_zero(e);
+	void updateDisplay(uint8_t displayBuffer[64 * 32]) {
+		uint32_t* pixels;
+		int pitch;
+		SDL_LockTexture(gTexture, NULL, (void**)&pixels, &pitch);
 
-			while (quit == false) {
-
-				
-				while (SDL_PollEvent(&e) == true) {
-					if (e.type == SDL_EVENT_QUIT) {
-						quit = true;
-					}
-				}
-				
-				SDL_SetRenderDrawColor(gRenderer, 0, 0, 0, 255);
-				SDL_RenderClear(gRenderer);
-
-				SDL_SetRenderDrawColor(gRenderer, rect_color.r, rect_color.g, rect_color.b, rect_color.a);
-				SDL_RenderFillRect(gRenderer, &rect);
-
-				SDL_RenderPresent(gRenderer);
-				SDL_UpdateWindowSurface(gWindow);
+		for (int i = 0; i < HEIGHT; i++) {
+			for (int j = 0; j < WIDTH; j++) {
+				int index = i * 64 + j;
+				uint32_t color = displayBuffer[index] ? 0xFFFFFFFF : 0xFF000000;
+				pixels[i * (pitch / 4) + j] = color;
 			}
 		}
 
-		return exitCode;
+		SDL_UnlockTexture(gTexture);
+		
+		SDL_SetRenderDrawColor(gRenderer, 0, 0, 0, 255);
+		SDL_RenderClear(gRenderer);
+
+		SDL_FRect dstRect = { 0, 0, WIDTH * SCALE, HEIGHT * SCALE };
+		SDL_RenderTexture(gRenderer, gTexture, NULL, &dstRect);
+
+		SDL_RenderPresent(gRenderer);
 	}
 };
 
@@ -141,30 +154,22 @@ int main(int argc, char* args[]) {
 	Chip8 chip8("./1-chip8-logo.ch8");
 	chip8.loadFonts();
 
-
-	std::cout << "hello" << std::endl;
-	for (int i = 0; i < 100; i++) {
-		std::cout << std::hex << static_cast<int>(chip8.memory[i + 0x200]) << " ";
-	}
-	//for (int i = 0; i < 80; i++) {
-	//	std::cout << std::bitset<8>(chip8.memory[i + 0x50]) << std::endl;
-	//	if ((i+1) % 5 == 0) {
-	//		std::cout << std::endl;
-	//	}
-	//}
-
 	Display display;
 
-	int exitCode = display.start();
+	bool quit = false;
 
 	display.init();
 
+	chip8.test();
 
-
+	while (quit == false) {
+		quit = display.processInput();
+		display.updateDisplay(chip8.display);
+	}
 
 	display.close();
 
-	return exitCode;
+	return 0;
 
 
 }
