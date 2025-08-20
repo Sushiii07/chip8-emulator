@@ -15,7 +15,9 @@ public:
 	uint8_t soundTimer{};
 	uint8_t registers[16]{};
 	uint8_t display[64 * 32]{};
+	uint8_t keypad[16] = { 0 };
 
+	void setKeypad(uint8_t keypad[16]);
 	void loadFonts();
 	void test();
 	uint16_t fetchInstruction();
@@ -42,6 +44,17 @@ public:
 	void op_BNNN(uint16_t NNN);
 	void op_CXNN(uint8_t X, uint8_t NN);
 	void op_DXYN(uint8_t VX, uint8_t VY, uint8_t N);
+	void op_EX9E(uint8_t X);
+	void op_EXA1(uint8_t X);
+	void op_FX07(uint8_t X);
+	void op_FX15(uint8_t X);
+	void op_FX18(uint8_t X);
+	void op_FX1E(uint8_t X);
+	void op_FX0A(uint8_t X);
+	void op_FX29(uint8_t X);
+	void op_FX33(uint8_t X);
+	void op_FX55(uint8_t X);
+	void op_FX65(uint8_t X);
 
 	void printDisplay();
 };

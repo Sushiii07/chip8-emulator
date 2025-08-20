@@ -6,10 +6,44 @@
 #include <bitset>
 #include <fstream>
 
-
+//const int key_0 = SDL_SCANCODE_X;
+//const int key_1 = SDL_SCANCODE_1;
+//const int key_2 = SDL_SCANCODE_2;
+//const int key_3 = SDL_SCANCODE_3;
+//const int key_4 = SDL_SCANCODE_Q;
+//const int key_5 = SDL_SCANCODE_W;
+//const int key_6 = SDL_SCANCODE_E;
+//const int key_7 = SDL_SCANCODE_A;
+//const int key_8 = SDL_SCANCODE_S;
+//const int key_9 = SDL_SCANCODE_D;
+//const int key_A = SDL_SCANCODE_Z;
+//const int key_B = SDL_SCANCODE_C;
+//const int key_C = SDL_SCANCODE_4;
+//const int key_D = SDL_SCANCODE_R;
+//const int key_E = SDL_SCANCODE_F;
+//const int key_F = SDL_SCANCODE_V;
+uint8_t keypad[16] = { 0 };
+int keymap[16] = {
+	SDL_SCANCODE_X,    // 0
+	SDL_SCANCODE_1,    // 1
+	SDL_SCANCODE_2,    // 2
+	SDL_SCANCODE_3,    // 3
+	SDL_SCANCODE_Q,    // 4
+	SDL_SCANCODE_W,    // 5
+	SDL_SCANCODE_E,    // 6
+	SDL_SCANCODE_A,    // 7
+	SDL_SCANCODE_S,    // 8
+	SDL_SCANCODE_D,    // 9
+	SDL_SCANCODE_Z,    // A
+	SDL_SCANCODE_C,    // B
+	SDL_SCANCODE_4,    // C
+	SDL_SCANCODE_R,    // D
+	SDL_SCANCODE_F,    // E
+	SDL_SCANCODE_V     // F
+};
 
 int main(int argc, char* args[]) {
-	Chip8 chip8("./1-chip8-logo.ch8");
+	Chip8 chip8("./BC_test.ch8");
 	chip8.loadFonts();
 
 	Display display;
@@ -18,20 +52,33 @@ int main(int argc, char* args[]) {
 
 	display.init();
 
-	//chip8.test();
-
-	//for (int i = 0; i < 101; i++) {
-	//	// Print each byte in 2-digit hex
-	//	std::cout << std::hex << static_cast<int>(chip8.memory[0x1FF + i]) << " ";
-
-	//	// Optional: newline every 16 bytes
-	//	if ((i + 1) % 16 == 0) {
-	//		std::cout << "\n";
-	//	}
-	//}
+	
 
 	while (quit == false) {
-		quit = display.processInput();
+		SDL_Event e;
+
+		while (SDL_PollEvent(&e)) {
+			if (e.type == SDL_EVENT_QUIT) {
+				quit = true;
+			}
+			else if (e.type == SDL_EVENT_KEY_DOWN) {
+				for (int i = 0; i < 16; i++) {
+					if (e.key.scancode == keymap[i]) {
+						keypad[i] = 1;
+					}
+				}
+			}
+			else if (e.type == SDL_EVENT_KEY_UP) {
+				for (int i = 0; i < 16; i++) {
+					if (e.key.scancode == keymap[i]) {
+						keypad[i] = 0;
+					}
+				}
+			}
+		}
+		chip8.setKeypad(keypad);
+
+		//quit = display.processInput();
 		display.updateDisplay(chip8.display);
 	
 		uint16_t instruction = chip8.fetchInstruction();
@@ -45,12 +92,15 @@ int main(int argc, char* args[]) {
 
 		switch (type) {
 			case 0: {
-				switch (N) {
-					case 0: {
+				switch (NN) {
+					case 0x00: {
+						break;
+					}
+					case 0xE0: {
 						chip8.op_00E0(); // Clear the display
 						break;
 					}
-					case 0x0E: {
+					case 0xEE: {
 						chip8.op_00EE(); // Return from Subroutine
 						break;
 					}
@@ -144,6 +194,60 @@ int main(int argc, char* args[]) {
 			}
 			case 0xD: {
 				chip8.op_DXYN(X, Y, N);
+				break;
+			}
+			case 0xE: {
+				switch (Y) {
+					case 9: {
+						chip8.op_EX9E(X);
+						break;
+					}
+					case 0xA: {
+						chip8.op_EXA1(X);
+						break;
+					}
+				}
+				break;
+			}
+			case 0xF: {
+				switch (NN) {
+					case 0x07: {
+						chip8.op_FX07(X);
+						break;
+					}
+					case 0x15: {
+						chip8.op_FX15(X);
+						break;
+					}
+					case 0x18: {
+						chip8.op_FX18(X);
+						break;
+					}
+					case 0x1E: {
+						chip8.op_FX1E(X);
+						break;
+					}
+					case 0x0A: {
+						chip8.op_FX0A(X);
+						break;
+					}
+					case 0x29: {
+						chip8.op_FX29(X);
+						break;
+					}
+					case 0x33: {
+						chip8.op_FX33(X);
+						break;
+					}
+					case 0x55: {
+						chip8.op_FX55(X);
+						break;
+					}
+					case 0x65: {
+						chip8.op_FX65(X);
+						break;
+					}
+				}
 				break;
 			}
 		}

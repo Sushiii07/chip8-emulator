@@ -2,6 +2,9 @@
 #include <fstream>
 #include <random>
 #include <iostream>
+#include <SDL3/SDL.h>	
+
+
 
 Chip8::Chip8(std::string filePath) {
 	std::ifstream file(filePath, std::ios::binary | std::ios::ate);
@@ -18,6 +21,12 @@ Chip8::Chip8(std::string filePath) {
 	file.close();
 
 	pc = 0x200;
+}
+
+void Chip8::setKeypad(uint8_t keypad[16]) {
+	for (int i = 0; i < 16; i++) {
+		this->keypad[i] = keypad[i];
+	}
 }
 
 void Chip8::loadFonts() {
@@ -62,7 +71,7 @@ void Chip8::printDisplay() {
 
 uint16_t Chip8::fetchInstruction() {
 	if (pc + 1 >= 4096) {
-		return 0xFFFF;
+		return 0x0000;
 	}
 	uint16_t instruction = (memory[pc] << 8) + memory[pc+1];
 	pc = pc + 2;
@@ -80,7 +89,8 @@ void Chip8::op_00EE() {
 	pc = stack[sp];
 }
 void Chip8::op_2NNN(uint16_t NNN) {
-	stack[sp] = pc - 2;
+	stack[sp] = pc;
+	sp++;
 	pc = NNN;
 }
 void Chip8::op_3XNN(uint8_t X, uint8_t NN) {
@@ -182,4 +192,63 @@ void Chip8::op_DXYN(uint8_t VX, uint8_t VY, uint8_t N) {
 		index++;
 	}
 }
-
+void Chip8::op_EX9E(uint8_t X) {
+	if (keypad[registers[X]]) {
+		pc += 2;
+	}
+}
+void Chip8::op_EXA1(uint8_t X) {
+	if (!keypad[registers[X]]) {
+		pc += 2;
+	}
+}
+void Chip8::op_FX07(uint8_t X) {
+	registers[X] = delayTimer;
+}
+void Chip8::op_FX15(uint8_t X) {
+	delayTimer = registers[X];
+}
+void Chip8::op_FX18(uint8_t X) {
+	soundTimer = registers[X];
+}
+void Chip8::op_FX1E(uint8_t X) {
+	index += registers[X];
+	if (index > 0x0FFF) {
+		registers[0xF] = 1;
+	}
+	else {
+		registers[0xF] = 0;
+	}
+}
+void Chip8::op_FX0A(uint8_t X) {
+	for (int i = 0; i < 16; i++) {
+		if (keypad[i]) {
+			registers[X] = i;
+			return;
+		}
+	}
+	pc -= 2;
+}
+void Chip8::op_FX29(uint8_t X) {
+	index = registers[X];
+}
+void Chip8::op_FX33(uint8_t X) {
+	int n = registers[X];
+	memory[index + 2] = n % 10;
+	n /= 10;
+	memory[index + 1] = n % 10;
+	n /= 10;
+	memory[index] = n % 10;
+}
+void Chip8::op_FX55(uint8_t X) {
+	for (int i = 0x0; i <= X; i++) {
+		memory[index] = registers[i];
+		index++;
+	}
+}
+void Chip8::op_FX65(uint8_t X) {
+	for (int i = 0x0; i <= X; i++) {
+		registers[i] = memory[index];
+		index++;
+	}
+}
