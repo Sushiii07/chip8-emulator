@@ -1,27 +1,8 @@
 #include "Chip8.hpp"
 #include "Display.hpp"
-
 #include <cstdint>
-#include <iostream>
-#include <bitset>
 #include <fstream>
 
-//const int key_0 = SDL_SCANCODE_X;
-//const int key_1 = SDL_SCANCODE_1;
-//const int key_2 = SDL_SCANCODE_2;
-//const int key_3 = SDL_SCANCODE_3;
-//const int key_4 = SDL_SCANCODE_Q;
-//const int key_5 = SDL_SCANCODE_W;
-//const int key_6 = SDL_SCANCODE_E;
-//const int key_7 = SDL_SCANCODE_A;
-//const int key_8 = SDL_SCANCODE_S;
-//const int key_9 = SDL_SCANCODE_D;
-//const int key_A = SDL_SCANCODE_Z;
-//const int key_B = SDL_SCANCODE_C;
-//const int key_C = SDL_SCANCODE_4;
-//const int key_D = SDL_SCANCODE_R;
-//const int key_E = SDL_SCANCODE_F;
-//const int key_F = SDL_SCANCODE_V;
 uint8_t keypad[16] = { 0 };
 int keymap[16] = {
 	SDL_SCANCODE_X,    // 0
@@ -43,7 +24,7 @@ int keymap[16] = {
 };
 
 int main(int argc, char* args[]) {
-	Chip8 chip8("./BC_test.ch8");
+	Chip8 chip8("./6-keypad.ch8", true);
 	chip8.loadFonts();
 
 	Display display;
@@ -61,7 +42,7 @@ int main(int argc, char* args[]) {
 			if (e.type == SDL_EVENT_QUIT) {
 				quit = true;
 			}
-			else if (e.type == SDL_EVENT_KEY_DOWN) {
+			/*else if (e.type == SDL_EVENT_KEY_DOWN) {
 				for (int i = 0; i < 16; i++) {
 					if (e.key.scancode == keymap[i]) {
 						keypad[i] = 1;
@@ -74,11 +55,18 @@ int main(int argc, char* args[]) {
 						keypad[i] = 0;
 					}
 				}
+			}*/
+
+			else if (e.type == SDL_EVENT_KEY_DOWN || e.type == SDL_EVENT_KEY_UP) {
+				for (int i = 0; i < 16; i++) {
+					if (e.key.scancode == keymap[i]) {
+						keypad[i] = (e.type == SDL_EVENT_KEY_DOWN);
+					}
+				}
 			}
 		}
 		chip8.setKeypad(keypad);
-
-		//quit = display.processInput();
+		display.beep(chip8.soundTimer);
 		display.updateDisplay(chip8.display);
 	
 		uint16_t instruction = chip8.fetchInstruction();
@@ -251,6 +239,9 @@ int main(int argc, char* args[]) {
 				break;
 			}
 		}
+		chip8.updateTimers();
+		display.beep(chip8.soundTimer > 0);
+
 	}
 
 	display.close();

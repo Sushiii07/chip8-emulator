@@ -1,10 +1,13 @@
 #pragma once
 #include <cstdint>
 #include <string>
+#include <chrono>
 
 class Chip8 {
 public:
-	Chip8(std::string filePath);
+	Chip8(std::string filePath, bool modern);
+
+	bool modern;
 
 	uint8_t memory[4096]{};
 	uint16_t pc{};
@@ -17,10 +20,13 @@ public:
 	uint8_t display[64 * 32]{};
 	uint8_t keypad[16] = { 0 };
 
+	std::chrono::steady_clock::time_point lastTimerUpdate;
+
 	void setKeypad(uint8_t keypad[16]);
 	void loadFonts();
-	void test();
 	uint16_t fetchInstruction();
+	void updateTimers();
+
 	void op_00E0();
 	void op_1NNN(uint16_t NNN);
 	void op_00EE();
@@ -55,6 +61,4 @@ public:
 	void op_FX33(uint8_t X);
 	void op_FX55(uint8_t X);
 	void op_FX65(uint8_t X);
-
-	void printDisplay();
 };

@@ -5,7 +5,7 @@
 bool Display::init() {
 	bool success{ true };
 
-	if (SDL_Init(SDL_INIT_VIDEO) == false) {
+	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) == false) {
 		SDL_Log("SD could not initialize! SDL error: %s\n", SDL_GetError());
 		success = false;
 	}
@@ -27,6 +27,26 @@ bool Display::init() {
 			SDL_SetTextureScaleMode(gTexture, SDL_SCALEMODE_NEAREST);
 		}
 	}
+
+	SDL_zero(spec);
+	spec.channels = 1;
+	spec.format = SDL_AUDIO_F32;
+	spec.freq = 48000;
+
+	device = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, nullptr, nullptr);
+	if (!device) {
+		SDL_Log("Failed to open audio: %s", SDL_GetError());
+	}
+	SDL_ResumeAudioStreamDevice(device);
+
+	bufferSize = spec.freq;
+	beepBuffer = new float[bufferSize];
+
+	int period = spec.freq / 440;
+	for (int i = 0; i < bufferSize; i++) {
+		beepBuffer[i] = (i % period < period / 2) ? 0.25f : -0.25f;
+	}
+
 	return success;
 }
 
@@ -37,17 +57,6 @@ void Display::close() {
 	gWindow = nullptr;
 
 	SDL_Quit();
-}
-
-bool Display::processInput() {
-	SDL_Event e;
-	SDL_zero(e);
-	while (SDL_PollEvent(&e) == true) {
-		if (e.type == SDL_EVENT_QUIT) {
-			return true;
-		}
-	}
-	return false;
 }
 
 void Display::updateDisplay(uint8_t displayBuffer[64 * 32]) {
@@ -72,4 +81,20 @@ void Display::updateDisplay(uint8_t displayBuffer[64 * 32]) {
 	SDL_RenderTexture(gRenderer, gTexture, NULL, &dstRect);
 
 	SDL_RenderPresent(gRenderer);
+}
+
+void Display::beep(bool enable) {
+	if (!device) {
+		return;
+	}
+	if (enable && !isBeeping) {
+		// start looping beep
+		SDL_PutAudioStreamData(device, beepBuffer, bufferSize * sizeof(float));
+		isBeeping = true;
+	}
+	else if (!enable && isBeeping) {
+		// stop beep by clearing stream
+		SDL_ClearAudioStream(device);
+		isBeeping = false;
+	}
 }

@@ -13,9 +13,15 @@ public:
 	SDL_Renderer* gRenderer{ nullptr };
 	SDL_Texture* gTexture{ nullptr };
 
+	SDL_AudioStream* device{ nullptr };
+	SDL_AudioSpec spec;
+	float* beepBuffer;
+	int bufferSize;
+	bool isBeeping = false;
+
 
 	bool init();
 	void close();
-	bool processInput();
 	void updateDisplay(uint8_t displayBuffer[64 * 32]);
+	void beep(bool enable);
 };

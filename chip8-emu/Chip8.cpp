@@ -1,12 +1,10 @@
 #include "Chip8.hpp"
 #include <fstream>
 #include <random>
-#include <iostream>
-#include <SDL3/SDL.h>	
+#include <SDL3/SDL.h>
+#include <chrono>
 
-
-
-Chip8::Chip8(std::string filePath) {
+Chip8::Chip8(std::string filePath, bool modern) {
 	std::ifstream file(filePath, std::ios::binary | std::ios::ate);
 	if (!file) {
 		throw std::runtime_error("Failed to open file: " + filePath);
@@ -21,6 +19,8 @@ Chip8::Chip8(std::string filePath) {
 	file.close();
 
 	pc = 0x200;
+	lastTimerUpdate = std::chrono::steady_clock::now();
+	this->modern = modern;
 }
 
 void Chip8::setKeypad(uint8_t keypad[16]) {
@@ -52,23 +52,6 @@ void Chip8::loadFonts() {
 	}
 }
 
-void Chip8::test() {
-	for (int i = 0; i < 64 * 32; i += 5) {
-		display[i] = 1;
-	}
-}
-
-void Chip8::printDisplay() {
-	for (int i = 0; i < 32; i++) {
-		for (int j = 0; j < 64; j++) {
-			std::cout << std::hex << static_cast<int>(display[i * 64 + j]);
-		}
-		std::cout << std::endl;
-	}
-	std::cout << std::endl;
-
-}
-
 uint16_t Chip8::fetchInstruction() {
 	if (pc + 1 >= 4096) {
 		return 0x0000;
@@ -76,6 +59,21 @@ uint16_t Chip8::fetchInstruction() {
 	uint16_t instruction = (memory[pc] << 8) + memory[pc+1];
 	pc = pc + 2;
 	return instruction;
+}
+
+void Chip8::updateTimers() {
+	auto now = std::chrono::steady_clock::now();
+	auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastTimerUpdate).count();
+
+	if (elapsed >= 16) {
+		if (delayTimer > 0) {
+			delayTimer--;
+		}
+		if (soundTimer > 0) {
+			soundTimer--;
+		}
+		lastTimerUpdate = now;
+	}
 }
 
 void Chip8::op_00E0() {
@@ -133,33 +131,47 @@ void Chip8::op_8XY3(uint8_t X, uint8_t Y) {
 }
 void Chip8::op_8XY4(uint8_t X, uint8_t Y) {
 	uint16_t sum = registers[X] + registers[Y];
-	registers[0xF] = (sum > 0xFF);
 	registers[X] = sum & 0xFF;
+	registers[0xF] = sum > 0xFF;
 }
 void Chip8::op_8XY5(uint8_t X, uint8_t Y) {
-	registers[0xF] = registers[X] > registers[Y];
-	registers[X] = registers[X] - registers[Y];
+	uint8_t x = registers[X];
+	uint8_t y = registers[Y];
+	registers[X] = x - y;
+	registers[0xF] = x >= y;
 }
 void Chip8::op_8XY7(uint8_t X, uint8_t Y) {
-	registers[0xF] = registers[Y] > registers[X];
+	uint8_t flag = registers[Y] >= registers[X];
 	registers[X] = registers[Y] - registers[X];
+	registers[0xF] = flag;
 }
 void Chip8::op_8XY6(uint8_t X, uint8_t Y) {
-	registers[X] = registers[Y];
-	registers[0xF] = registers[X] & 0x01;
+	if (!modern) {
+		registers[X] = registers[Y];
+	}
+	uint8_t flag = registers[X] & 0x01;
 	registers[X] = registers[X] >> 1;
-
+	registers[0xF] = flag;
 }
 void Chip8::op_8XYE(uint8_t X, uint8_t Y) {
-	registers[X] = registers[Y];
-	registers[0xF] = registers[X] & 0x80;
+	if (!modern) {
+		registers[X] = registers[Y];
+	}
+	uint8_t flag = (registers[X] & 0x80) >> 7;
 	registers[X] = registers[X] << 1;
+	registers[0xF] = flag;
 }
 void Chip8::op_ANNN(uint16_t NNN) {
 	index = NNN;
 }
 void Chip8::op_BNNN(uint16_t NNN) {
-	pc = NNN + registers[0];
+	if (!modern) {
+		pc = NNN + registers[0];
+	}
+	else {
+		uint8_t X = (NNN & 0x0F00) >> 8;
+		pc = NNN + registers[X];
+	}
 }
 void Chip8::op_CXNN(uint8_t X, uint8_t NN) {
 	std::random_device r;
@@ -176,20 +188,19 @@ void Chip8::op_DXYN(uint8_t VX, uint8_t VY, uint8_t N) {
 		if (row >= 32) {
 			break;
 		}
-		uint8_t sprite = memory[index];
+		uint8_t sprite = memory[index + row - Y];
 		for (uint8_t col = 0; col < 8; col++) {
 			if (X + col >= 64) {
 				break;
 			}
-			if ((sprite & (1 << (7 - col))) && display[row * 64 + X + col]) {
-				display[row * 64 + X + col] = 0;
-				registers[0xF] = 1;
-			}
-			else if (sprite & (1 << (7 - col))) {
-				display[row * 64 + X + col] = 1;
+			uint8_t pixel = (sprite >> (7 - col)) & 1;
+			if (pixel) {
+				if (display[row * 64 + X + col]) {
+					registers[0xF] = 1;
+				}
+				display[row * 64 + X + col] ^= 1;
 			}
 		}
-		index++;
 	}
 }
 void Chip8::op_EX9E(uint8_t X) {
@@ -213,11 +224,13 @@ void Chip8::op_FX18(uint8_t X) {
 }
 void Chip8::op_FX1E(uint8_t X) {
 	index += registers[X];
-	if (index > 0x0FFF) {
-		registers[0xF] = 1;
-	}
-	else {
-		registers[0xF] = 0;
+	if (modern) {
+		if (index > 0x0FFF) {
+			registers[0xF] = 1;
+		}
+		else {
+			registers[0xF] = 0;
+		}
 	}
 }
 void Chip8::op_FX0A(uint8_t X) {
@@ -241,14 +254,28 @@ void Chip8::op_FX33(uint8_t X) {
 	memory[index] = n % 10;
 }
 void Chip8::op_FX55(uint8_t X) {
-	for (int i = 0x0; i <= X; i++) {
-		memory[index] = registers[i];
-		index++;
+	if (!modern) {
+		for (int i = 0x0; i <= X; i++) {
+			memory[index] = registers[i];
+			index++;
+		}
+	}
+	else {
+		for (int i = 0x0; i <= X; i++) {
+			memory[index+i] = registers[i];
+		}
 	}
 }
 void Chip8::op_FX65(uint8_t X) {
-	for (int i = 0x0; i <= X; i++) {
-		registers[i] = memory[index];
-		index++;
+	if (!modern) {
+		for (int i = 0x0; i <= X; i++) {
+			registers[i] = memory[index];
+			index++;
+		}
+	}
+	else {
+		for (int i = 0x0; i <= X; i++) {
+			registers[i] = memory[index+i];
+		}
 	}
 }
