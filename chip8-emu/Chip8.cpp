@@ -234,13 +234,33 @@ void Chip8::op_FX1E(uint8_t X) {
 	}
 }
 void Chip8::op_FX0A(uint8_t X) {
-	for (int i = 0; i < 16; i++) {
-		if (keypad[i]) {
-			registers[X] = i;
-			return;
+	static bool waitingForRelease = false;
+	if (!waitingForRelease) {
+		for (uint8_t i = 0; i < 16; i++) {
+			if (keypad[i] != 0) {
+				registers[X] = i;
+				waitingForRelease = true;
+				pc -= 2;
+				return;
+			}
+		}
+		pc -= 2;
+	}
+	else {
+		bool anyPressed = false;
+		for (uint8_t i = 0; i < 16; i++) {
+			if (keypad[i] != 0) {
+				anyPressed = true;
+				break;
+			}
+		}
+		if (!anyPressed) {
+			waitingForRelease = false;
+ 		}
+		else {
+			pc -= 2;
 		}
 	}
-	pc -= 2;
 }
 void Chip8::op_FX29(uint8_t X) {
 	index = registers[X];
